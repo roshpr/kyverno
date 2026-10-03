@@ -27,6 +27,11 @@ func ProcessStrategicMergePatch(logger logr.Logger, overlay interface{}, resourc
 }
 
 func strategicMergePatch(logger logr.Logger, base, overlay string) ([]byte, error) {
+	// Escape before both parses. preProcessStrategicMergePatch reads the
+	// documents, and filtersutil.ApplyToJSON parses base again.
+	base = escapeYAMLIncompatibleJSON(base)
+	overlay = escapeYAMLIncompatibleJSON(overlay)
+
 	preprocessedYaml, err := preProcessStrategicMergePatch(logger, overlay, base)
 	if err != nil {
 		_, isConditionError := err.(ConditionError)
@@ -54,10 +59,15 @@ func strategicMergePatch(logger logr.Logger, base, overlay string) ([]byte, erro
 }
 
 func preProcessStrategicMergePatch(logger logr.Logger, pattern, resource string) (*yaml.RNode, error) {
-	patternNode := yaml.MustParse(pattern)
-	resourceNode := yaml.MustParse(resource)
+	patternNode, err := yaml.Parse(pattern)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse strategic merge overlay: %w", err)
+	}
+	resourceNode, err := yaml.Parse(resource)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse resource: %w", err)
+	}
 
-	err := PreProcessPattern(logger, patternNode, resourceNode)
-
+	err = PreProcessPattern(logger, patternNode, resourceNode)
 	return patternNode, err
 }
